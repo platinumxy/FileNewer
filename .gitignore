@@ -1,0 +1,11 @@
+## BUILDS
+*.o
+*.obj
+*.exe
+Debug
+CMakeFiles
+build
+
+## Ignore Custom Launch and AutoBuild scripts
+build.bat
+edit.bat
