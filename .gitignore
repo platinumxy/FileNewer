@@ -13,3 +13,8 @@ edit.bat
 ## Ignore imgui lib
 imgui
 imgui.ini
+
+## Ignore builds 
+CMakeCache.txt
+cmake_install.cmake
+build.ninja
