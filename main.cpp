@@ -1,6 +1,5 @@
-// #include "imgui/imgui.h"
 #include "imgui/backends/imgui_impl_dx11.h"
-#include "imgui/backends/imgui_impl_win32.h" //ignore the errro
+#include "imgui/backends/imgui_impl_win32.h" 
 #include "imgui/imgui.h"
 
 #include <d3d11.h>
@@ -13,7 +12,8 @@ static IDXGISwapChain*          g_pSwapChain = nullptr;
 static UINT                     g_ResizeWidth = 0, g_ResizeHeight = 0;
 static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
 
-// Forward declarations of helper functions
+// Forward declarations of helper function s
+bool SetUpWindow(HWND& hWnd, ImGuiIO& io, WNDCLASSEXW& wc);
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
 void CreateRenderTarget();
@@ -23,38 +23,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 int main(int, char**)
 {
-    // Create application window
-    //ImGui_ImplWin32_EnableDpiAwareness();
-    WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
-    ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"MyExample", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
-
-    // Initialize Direct3D
-    if (!CreateDeviceD3D(hwnd))
-    {
-        CleanupDeviceD3D();
-        ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-        return 1;
-    }
-
-    // Show the window
-    ::ShowWindow(hwnd, SW_SHOWDEFAULT);
-    ::UpdateWindow(hwnd);
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplWin32_Init(hwnd);
-    ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+    HWND hwnd;
+    ImGuiIO io;
+    WNDCLASSEXW wc;
+    if (!SetUpWindow(hwnd, io, wc)) { return 1; }
 
     // Load Fonts
     // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
@@ -73,12 +45,11 @@ int main(int, char**)
     //IM_ASSERT(font != nullptr);
 
     // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
     bool done = false;
+
     while (!done)
     {
         // Poll and handle messages (inputs, window resize, etc.)
@@ -102,58 +73,66 @@ int main(int, char**)
             g_ResizeWidth = g_ResizeHeight = 0;
             CreateRenderTarget();
         }
-
-        // Start the Dear ImGui frame
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
+        //Create new window
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+        ImGui::Begin("MYAPPLICATION", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoTitleBar);
 
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+        // Calculate the height for the sidebars to fit in the window without scrolling
+        float sidebarHeight = ImGui::GetWindowHeight() - ImGui::GetStyle().WindowPadding.y * 2;
+        //============PINNED FILES==============
+        ImGui::BeginChild("PinnedFiles", ImVec2(150, sidebarHeight), true);
+        ImGui::Text("FILES SECTION");
+        ImGui::EndChild();
+        
+        ImGui::SameLine();
+        
+        //===========Main Files Section============
+        ImGui::BeginGroup(); // Begin a group for the main content area
+        //          FilePath
+        static char mainDetailsText[256];
+        float windowPadding = ImGui::GetStyle().WindowPadding.x; 
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - 150 - windowPadding); // adjust file input box len
+        ImGui::InputText("##MainDetails", mainDetailsText, 256);
+        ImGui::PopItemWidth(); // Reset the item width to default
+        
+        //              Centeral context
+        float secondSidebarWidth = 150; // TODO update to naturaly adjust
+        ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + ImGui::GetContentRegionAvail().x - secondSidebarWidth);
+        ImGui::Text("some information jfsdhglksdjf hgldjhfglkdj sfhglkj sd h f  glkjhdfgl kjdhfglkjsdhfg lkjhsdfglkjhsdf lgkjhsdflgkjhsdflkgjhsd  lfkgjhsdflkgjhsd lfkgjhsdlfkjghlsdkfjghlsd k fjghlksdfj ghlksdjf  hglksdfj hglksd fjhgks djfhglsdfjh glks dfjhglksdjf hglkdsfj ghl sdkfjghl sdkfj ghlsdkfjghlsdkfj ghls dfkjghsdlfkgjhsdfgljhsdflgkj hsdfl k gjhsd fkl gjhsdlfkg jhsd flkjg hsdfl gjhsdfl gkjhsdflgk jhsdfgl kjhsdfgl kjsdhf");
+        ImGui::PopTextWrapPos();
+        ImGui::EndGroup();
+        
+        //===========File Utilitys================ 
+        ImGui::SameLine();
+        float sidebar2PosX = ImGui::GetWindowContentRegionMax().x - secondSidebarWidth;
+        ImGui::SetCursorPosX(sidebar2PosX);
+        ImGui::BeginChild("FileUtils", ImVec2(secondSidebarWidth, sidebarHeight), true);
+        ImGui::Text("File Utilitys");
+        ImGui::EndChild();      
+
+
+        ImGui::End(); 
+        static ImVec2 lastFrameBufferSize = ImVec2(0, 0);
+        ImVec2 currentFrameBufferSize = ImGui::GetIO().DisplaySize;
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && (lastFrameBufferSize.x != currentFrameBufferSize.x || lastFrameBufferSize.y != currentFrameBufferSize.y))
         {
-            static float f = 0.0f;
-            static int counter = 0;
-
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
-
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
+            // Resize the frame buffer
+            lastFrameBufferSize = currentFrameBufferSize;
         }
 
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
-
-        // Rendering
         ImGui::Render();
+
         const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
-        g_pSwapChain->Present(1, 0); // Present with vsync
-        //g_pSwapChain->Present(0, 0); // Present without vsync
+        g_pSwapChain->Present(1, 0); // Use vsync    
     }
 
     // Cleanup
@@ -169,6 +148,44 @@ int main(int, char**)
 }
 
 // Helper functions
+
+bool SetUpWindow(HWND& hwnd, ImGuiIO& io, WNDCLASSEXW& wc)
+{
+    // Create application window
+    //ImGui_ImplWin32_EnableDpiAwareness();
+   wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
+    ::RegisterClassExW(&wc);
+    hwnd = ::CreateWindowW(wc.lpszClassName, L"MyExample", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
+
+    // Initialize Direct3D
+    if (!CreateDeviceD3D(hwnd))
+    {
+        CleanupDeviceD3D();
+        ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
+        return false;
+    }
+
+    // Show the window
+    ::ShowWindow(hwnd, SW_SHOWDEFAULT);
+    ::UpdateWindow(hwnd);
+
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    //ImGui::StyleColorsLight();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplWin32_Init(hwnd);
+    ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+    return true;
+}
+
 
 bool CreateDeviceD3D(HWND hWnd)
 {
