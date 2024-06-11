@@ -150,14 +150,15 @@ impl FileNewerGui {
         let edit_date_col = Column::auto();//.at_most(timestamp_col_len);
         //width_available -= timestamp_col_len;
         //width_available -= timestamp_col_len;
-
+        let file_size_col = Column::auto();
 
         table = table.column(Column::exact(10.0))// File Icon
             .column(Column::auto())
                 //.at_most(width_available))// File Name
             .column(file_ext_col)// File type
             .column(create_date_col)// File creation date
-            .column(edit_date_col);// File last edit date
+            .column(edit_date_col)      // File last edit date
+            .column(file_size_col);          //create
 
         table = table.sense(egui::Sense::click());
 
@@ -168,9 +169,11 @@ impl FileNewerGui {
                 header.col(|ui| { ui.strong("File Type"); });
                 header.col(|ui| { ui.strong("Creation Date"); });
                 header.col(|ui| { ui.strong("Modified Date"); });
+                header.col(|ui| { ui.strong("File Size"); });
             })
             .body(|mut body| {
                 for file in self.files_in_cur_path.iter(){
+                    if file.is_hidden { continue; }
                     const ROW_HEIGHT:f32 = 18.0;
                     body.row(ROW_HEIGHT, |mut row| {
                         //TODO check how selctiong works row.set_selected(self.selection.contains(&row_index));
@@ -204,6 +207,12 @@ impl FileNewerGui {
                                         .to_string())
                                 .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
                         );});
+
+                        row.col(|ui|{
+                            ui.label(
+                                if !file.is_dir {format!("{}",file.file_size)}
+                                else {"-".to_owned()});
+                        });
                     });
                 }
             })
@@ -216,8 +225,8 @@ impl FileNewerGui {
         let body_text_size = TextStyle::Body.resolve(ui.style()).size;
         use egui_extras::{Size, StripBuilder};
         StripBuilder::new(ui)
-            .size(Size::remainder().at_least(100.0)) // for the table
-            .size(Size::exact(body_text_size)) // for the source code link
+            .size(Size::remainder())//at_least(100.0)) // for the table
+            //.size(Size::exact(body_text_size)) // for the source code link
             .vertical(|mut strip| {
                 strip.cell(|ui| {
                     egui::ScrollArea::horizontal().show(ui, |ui| {

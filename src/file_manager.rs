@@ -6,6 +6,7 @@ use std::time::SystemTime;
 use std::fs;
 use std::fs::{DirEntry, File};
 use std::io::BufRead;
+use std::os::windows::prelude::MetadataExt;
 
 pub struct FileInfo {
     pub(crate) is_dir: bool,
@@ -16,7 +17,8 @@ pub struct FileInfo {
     pub(crate) file_size: u64,
     pub(crate) last_access: Option<SystemTime>,
     pub(crate) last_modification: Option<SystemTime>,
-    pub(crate) creation_time: Option<SystemTime>
+    pub(crate) creation_time: Option<SystemTime>,
+    pub(crate) is_hidden: bool,
 }
 
 pub fn evaluate_path_vars(user_facing_path: &str) -> Result<String, VarError> {
@@ -44,7 +46,7 @@ pub fn evaluate_path_vars(user_facing_path: &str) -> Result<String, VarError> {
         String::from(new_path)
     };
 
-    // Ensure the path ends with a /
+    // Ensure the path ends with a \\
     if !final_path.ends_with("\\") {
         final_path.push_str("\\");
     }
@@ -75,7 +77,8 @@ pub fn get_files_in_dir<P: AsRef<Path>>(path: &P) -> io::Result<Vec<FileInfo>> {
                 file_size: meta.len(),
                 last_access: meta.accessed().ok(),
                 last_modification: meta.modified().ok(),
-                creation_time: meta.created().ok()
+                creation_time: meta.created().ok(),
+                is_hidden: is_hidden(&dir.path()).unwrap()
             }))
         }).collect()
 }
@@ -110,6 +113,19 @@ pub fn get_file_info<P: AsRef<Path>>(path: &P) -> io::Result<FileInfo>{
         file_size: meta.len(),
         last_access: meta.accessed().ok(),
         last_modification: meta.modified().ok(),
-        creation_time: meta.created().ok()
+        creation_time: meta.created().ok(),
+        is_hidden: is_hidden(&path.to_path_buf()).unwrap()
     })
+}
+
+// code is_hidden from https://users.rust-lang.org/t/read-windows-hidden-file-attribute/51180/7
+pub fn is_hidden(file_path: &std::path::PathBuf) -> io::Result<bool> {
+    let metadata = fs::metadata(file_path)?;
+    let attributes = metadata.file_attributes();
+
+    if (attributes & 0x2) > 0 {
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
