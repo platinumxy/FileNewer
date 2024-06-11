@@ -1,14 +1,10 @@
 use std::env;
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 use eframe::egui;
-use egui_extras::{Column, Table, TableBuilder};
+use egui_extras::{Column, TableBuilder};
 use crate::file_manager;
 use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo};
-use chrono::offset::Utc;
 use chrono::{DateTime, Local};
-use eframe::egui::TextStyle;
 
 pub struct FileNewerGui {
     active_path: PathBuf,
@@ -31,18 +27,20 @@ impl Default for FileNewerGui {
 
 impl eframe::App for FileNewerGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let min_central_panel_width = 500.0; // Set this to your preferred minimum width
-        let max_side_panel_width = (ctx.available_rect().width() - min_central_panel_width) / 2.0;
+        let min_central_panel_width = 600.0;
+        let default_side_bar_width = 150.0;
+        let max_side_panel_width =
+            (ctx.available_rect().width() - min_central_panel_width) / 2.0;
 
         egui::SidePanel::left("File_Tree")
             .resizable(true)
-            .default_width(250.0)
+            .default_width(default_side_bar_width)
             .max_width(max_side_panel_width)
             .show(ctx,|ui| { self.build_side_panel_left(ui)});
 
         egui::SidePanel::right("File_Utils")
             .resizable(true)
-            .default_width(250.0)
+            .default_width(default_side_bar_width)
             .max_width(max_side_panel_width)
             .show(ctx, |ui| self.build_side_panel_right(ui));
 
@@ -51,7 +49,7 @@ impl eframe::App for FileNewerGui {
                 ui.horizontal(|ui| self.build_top_panel(ui) );
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| self.build_main_frame(ui, ctx));
+        egui::CentralPanel::default().show(ctx, |ui| self.build_main_frame(ui));
 
         ctx.request_repaint();
         if let Some(error_message) = self.error_message.clone() {
@@ -78,8 +76,7 @@ impl FileNewerGui {
         ui.vertical_centered(|ui| {
             ui.heading("Left Panel");
         });
-        egui::ScrollArea::vertical().show(ui, |ui| {
-        });
+        egui::ScrollArea::vertical().show(ui, |_ui| {});
     }
 
     fn build_side_panel_right(&mut self, ui: &mut egui::Ui) {
@@ -87,9 +84,7 @@ impl FileNewerGui {
         ui.vertical_centered(|ui| {
             ui.heading("Right Panel");
         });
-        egui::ScrollArea::vertical().show(ui, |ui| {
-
-        });
+        egui::ScrollArea::vertical().show(ui, |_ui| {});
     }
 
     fn build_top_panel(&mut self, ui: &mut egui::Ui) {
@@ -99,11 +94,11 @@ impl FileNewerGui {
             .labelled_by(path_label.id);
 
         if new_path.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            self.update_working_dir(ui);
+            self.update_working_dir();
         }
     }
 
-    fn update_working_dir(&mut self, ui: &mut egui::Ui) {
+    fn update_working_dir(&mut self) {
         let path = match evaluate_path_vars(&self.user_facing_path) {
             Ok(path) => path,
             Err(e) => {
@@ -129,9 +124,8 @@ impl FileNewerGui {
         }
     }
 
-    fn build_files_table(&mut self, ui: &mut egui::Ui, ctx: &egui::Context){
+    fn build_files_table(&mut self, ui: &mut egui::Ui){
         let height_available = ui.available_height();
-        let mut width_available = ui.available_width();
         let mut table = TableBuilder::new(ui)
             .resizable(true)
             .striped(true)
@@ -139,17 +133,10 @@ impl FileNewerGui {
             .min_scrolled_height(0.0)
             .max_scroll_height(height_available);
 
-        // TODO naturally adapt this
-        //let extension_col_len = estimate_str_len_as_label("EXTN", ctx);
-        let mut file_ext_col = Column::auto();//.at_most(extension_col_len);
-        //width_available -= extension_col_len;
 
-        // this can be a hardcoded string because its always formated like this
-        //let timestamp_col_len = estimate_str_len_as_label("XXXX-XX-XX XX:XX:XX", ctx);
-        let create_date_col = Column::auto();//.at_most(timestamp_col_len);
-        let edit_date_col = Column::auto();//.at_most(timestamp_col_len);
-        //width_available -= timestamp_col_len;
-        //width_available -= timestamp_col_len;
+        let file_ext_col = Column::auto();
+        let create_date_col = Column::auto();
+        let edit_date_col = Column::auto();
         let file_size_col = Column::auto();
 
         table = table.column(Column::exact(10.0))// File Icon
@@ -218,11 +205,8 @@ impl FileNewerGui {
             })
 
     }
-    fn build_main_frame(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
-        //ui.set_min_width(300.0); // Set the minimum width to 300.0
-        //self.build_files_table(ui, ctx);
 
-        let body_text_size = TextStyle::Body.resolve(ui.style()).size;
+    fn build_main_frame(&mut self, ui: &mut egui::Ui) {
         use egui_extras::{Size, StripBuilder};
         StripBuilder::new(ui)
             .size(Size::remainder())//at_least(100.0)) // for the table
@@ -230,7 +214,7 @@ impl FileNewerGui {
             .vertical(|mut strip| {
                 strip.cell(|ui| {
                     egui::ScrollArea::horizontal().show(ui, |ui| {
-                        self.build_files_table(ui, ctx);
+                        self.build_files_table(ui);
                     });
                 });
             });

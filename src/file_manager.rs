@@ -4,14 +4,12 @@ use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::time::SystemTime;
 use std::fs;
-use std::fs::{DirEntry, File};
-use std::io::BufRead;
 use std::os::windows::prelude::MetadataExt;
 
 pub struct FileInfo {
     pub(crate) is_dir: bool,
     pub(crate) can_be_written: bool,
-    pub(crate) is_link: bool,  // Adds SymLink support, though not many will have this
+    pub(crate) is_link: bool,
     pub(crate) file_name: OsString,
     pub(crate) file_ext: Option<String>,
     pub(crate) file_size: u64,
@@ -81,15 +79,6 @@ pub fn get_files_in_dir<P: AsRef<Path>>(path: &P) -> io::Result<Vec<FileInfo>> {
                 is_hidden: is_hidden(&dir.path()).unwrap()
             }))
         }).collect()
-}
-
-pub fn get_file_ext(path: String) -> Option<String>{
-    let parts: Vec<&str> = path.split('.').collect();
-    if parts.len() != 1 {
-        Option::from(parts.last().unwrap().to_string())
-    } else {
-        None
-    }
 }
 
 pub fn get_file_info<P: AsRef<Path>>(path: &P) -> io::Result<FileInfo>{
