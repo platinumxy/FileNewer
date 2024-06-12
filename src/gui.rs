@@ -6,6 +6,11 @@ use crate::file_manager;
 use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo};
 use chrono::{DateTime, Local};
 
+// CONSTS
+const MIN_CENTRAL_PANEL_WIDTH:f32 = 600.0;
+const DEFAULT_SIDE_BAR_WIDTH:f32 = 150.0;
+
+
 pub struct FileNewerGui {
     active_path: PathBuf,
     user_facing_path: String,
@@ -27,31 +32,20 @@ impl Default for FileNewerGui {
 
 impl eframe::App for FileNewerGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let min_central_panel_width = 600.0;
-        let default_side_bar_width = 150.0;
         let max_side_panel_width =
-            (ctx.available_rect().width() - min_central_panel_width) / 2.0;
-
-        egui::SidePanel::left("File_Tree")
-            .resizable(true)
-            .default_width(default_side_bar_width)
-            .max_width(max_side_panel_width)
-            .show(ctx,|ui| { self.build_side_panel_left(ui)});
-
-        egui::SidePanel::right("File_Utils")
-            .resizable(true)
-            .default_width(default_side_bar_width)
-            .max_width(max_side_panel_width)
-            .show(ctx, |ui| self.build_side_panel_right(ui));
-
-        egui::TopBottomPanel::top("File_Path")
-            .show(ctx, |ui|{
-                ui.horizontal(|ui| self.build_top_panel(ui) );
-            });
-
-        egui::CentralPanel::default().show(ctx, |ui| self.build_main_frame(ui));
-
+            (ctx.available_rect().width() - MIN_CENTRAL_PANEL_WIDTH) / 2.0;
+        self.display_left_side_panel(ctx, max_side_panel_width);
+        self.display_right_side_panel(ctx, max_side_panel_width);
+        self.display_top_panel(ctx);
+        self.display_main_panel(ctx);
+        self.display_error_msg(ctx);
         ctx.request_repaint();
+    }
+}
+
+// DISPLAYS
+impl FileNewerGui {
+    fn display_error_msg(&mut self, ctx: &egui::Context){
         if let Some(error_message) = self.error_message.clone() {
             let mut open = true;
             egui::Window::new("Error")
@@ -60,17 +54,51 @@ impl eframe::App for FileNewerGui {
                 .resizable(false)
                 .show(ctx, |ui| {
                     ui.label(error_message);
-                    if ui.button("OK").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                        // Clear the error message
-                        self.error_message = None;
-                    }
+                    if ui.button("OK").clicked() || ui.input(|i| {
+                        i.key_pressed(egui::Key::Escape)}) { self.error_message = None; }
                 });
             if !open { self.error_message = None; }
         }
+    }
 
+    fn display_left_side_panel(&mut self, ctx: &egui::Context, max_width:f32){
+        egui::SidePanel::left("File_Tree")
+            .resizable(true)
+            .default_width(DEFAULT_SIDE_BAR_WIDTH)
+            .max_width(max_width)
+            .show(ctx,|ui| {
+                self.build_side_panel_left(ui)
+            });
+    }
+
+    fn display_right_side_panel(&mut self, ctx: &egui::Context, max_width:f32){
+        egui::SidePanel::right("File_Utils")
+            .resizable(true)
+            .default_width(DEFAULT_SIDE_BAR_WIDTH)
+            .max_width(max_width)
+            .show(ctx, |ui| {
+                self.build_side_panel_right(ui)
+            });
+    }
+
+    fn display_top_panel(&mut self, ctx: &egui::Context){
+        egui::TopBottomPanel::top("File_Path")
+            .show(ctx, |ui|{
+                ui.horizontal(|ui| {
+                    self.build_top_panel(ui)
+                });
+            });
+    }
+
+    fn display_main_panel(&mut self, ctx: &egui::Context){
+        egui::CentralPanel::default()
+            .show(ctx, |ui| {
+                self.build_main_frame(ui)
+            });
     }
 }
 
+// BUILD ITEMS
 impl FileNewerGui {
     fn build_side_panel_left(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
@@ -124,7 +152,7 @@ impl FileNewerGui {
         }
     }
 
-    fn build_files_table(&mut self, ui: &mut egui::Ui){
+    fn build_files_table(&mut self, ui: &mut egui::Ui) {
         let height_available = ui.available_height();
         let mut table = TableBuilder::new(ui)
             .resizable(true)
@@ -141,7 +169,7 @@ impl FileNewerGui {
 
         table = table.column(Column::exact(10.0))// File Icon
             .column(Column::auto())
-                //.at_most(width_available))// File Name
+            //.at_most(width_available))// File Name
             .column(file_ext_col)// File type
             .column(create_date_col)// File creation date
             .column(edit_date_col)      // File last edit date
@@ -150,7 +178,7 @@ impl FileNewerGui {
         table = table.sense(egui::Sense::click());
 
         table
-            .header(20.0 ,|mut header|{
+            .header(20.0, |mut header| {
                 header.col(|ui| { ui.strong(""); }); // Icon
                 header.col(|ui| { ui.strong("File Name"); });
                 header.col(|ui| { ui.strong("File Type"); });
@@ -159,51 +187,57 @@ impl FileNewerGui {
                 header.col(|ui| { ui.strong("File Size"); });
             })
             .body(|mut body| {
-                for file in self.files_in_cur_path.iter(){
+                for file in self.files_in_cur_path.iter() {
                     if file.is_hidden { continue; }
-                    const ROW_HEIGHT:f32 = 18.0;
+                    const ROW_HEIGHT: f32 = 18.0;
                     body.row(ROW_HEIGHT, |mut row| {
-                        //TODO check how selctiong works row.set_selected(self.selection.contains(&row_index));
-                        row.col(|ui|{ui.label(match (file.is_dir, file.can_be_written, file.is_link){
-                            (true, false, false) => {"D".to_string()}
-                            (true, true, false)  => {"d".to_string()}
-                            (false, false, true)  => {"L".to_string()}
-                            (false, true, true)   => {"l".to_string()}
-                            (false, false, false)=> {"F".to_string()}
-                            (false, true, false) => {"f".to_string()}
-                            _ => {"?".to_string()}
-                        });});
-                        row.col(|ui|{ui.label(match file.file_name.to_str() {
-                            Some(s) => s.to_string(),
-                            None => "!!ERROR!!".to_string(),
-                        });});
-                        row.col(|ui|{ui.label(file.file_ext.as_ref().unwrap_or(&"".to_string()));});
-                        row.col(|ui|{ui.label(
-                            file.creation_time
-                                .map(|t|
-                                    DateTime::<Local>::from(t)
-                                        .format("%F %T")
-                                        .to_string())
-                                .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
-                        );});
-                        row.col(|ui|{ui.label(
-                            file.last_modification
-                                .map(|t|
-                                    DateTime::<Local>::from(t)
-                                        .format("%F %T")
-                                        .to_string())
-                                .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
-                        );});
-
-                        row.col(|ui|{
+                        //TODO check how selection works row.set_selected(self.selection.contains(&row_index));
+                        row.col(|ui| {
+                            ui.label(match (file.is_dir, file.can_be_written, file.is_link) {
+                                (true, false, false) => { "D".to_string() }
+                                (true, true, false) => { "d".to_string() }
+                                (false, false, true) => { "L".to_string() }
+                                (false, true, true) => { "l".to_string() }
+                                (false, false, false) => { "F".to_string() }
+                                (false, true, false) => { "f".to_string() }
+                                _ => { "?".to_string() }
+                            });
+                        });
+                        row.col(|ui| {
+                            ui.label(match file.file_name.to_str() {
+                                Some(s) => s.to_string(),
+                                None => "!!ERROR!!".to_string(),
+                            });
+                        });
+                        row.col(|ui| { ui.label(file.file_ext.as_ref().unwrap_or(&"".to_string())); });
+                        row.col(|ui| {
                             ui.label(
-                                if !file.is_dir {format!("{}",file.file_size)}
-                                else {"-".to_owned()});
+                                file.creation_time
+                                    .map(|t|
+                                        DateTime::<Local>::from(t)
+                                            .format("%F %T")
+                                            .to_string())
+                                    .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
+                            );
+                        });
+                        row.col(|ui| {
+                            ui.label(
+                                file.last_modification
+                                    .map(|t|
+                                        DateTime::<Local>::from(t)
+                                            .format("%F %T")
+                                            .to_string())
+                                    .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
+                            );
+                        });
+
+                        row.col(|ui| {
+                            ui.label(
+                                if !file.is_dir { format!("{}", file.file_size) } else { "-".to_owned() });
                         });
                     });
                 }
             })
-
     }
 
     fn build_main_frame(&mut self, ui: &mut egui::Ui) {

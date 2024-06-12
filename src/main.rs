@@ -2,11 +2,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod gui;
 mod file_manager;
+mod tests;
 
 use crate::gui::FileNewerGui;
 use eframe::egui;
 
 fn main() -> Result<(), eframe::Error> {
+
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
