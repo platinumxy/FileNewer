@@ -4,7 +4,6 @@ use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use crate::file_manager;
 use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo};
-use chrono::{DateTime, Local};
 
 // CONSTS
 const MIN_CENTRAL_PANEL_WIDTH:f32 = 600.0;
@@ -16,16 +15,20 @@ pub struct FileNewerGui {
     user_facing_path: String,
     error_message: Option<String>,
     files_in_cur_path: Vec<FileInfo>,
+    selected_file: Option<usize>,
+    show_hidden:bool
 }
 
 impl Default for FileNewerGui {
     fn default() -> Self {
         let path = PathBuf::from(Path::new(&env::var("USERPROFILE").unwrap()));
         Self {
-            files_in_cur_path: file_manager::get_files_in_dir(&path).expect("REASON"),
+            files_in_cur_path: file_manager::get_files_in_dir(&path, &false).expect("REASON"),
             user_facing_path: path.to_str().unwrap().to_string(),
             active_path: path,
             error_message: None,
+            selected_file: None,
+            show_hidden: false,
         }
     }
 }
@@ -34,8 +37,8 @@ impl eframe::App for FileNewerGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let max_side_panel_width =
             (ctx.available_rect().width() - MIN_CENTRAL_PANEL_WIDTH) / 2.0;
-        self.display_left_side_panel(ctx, max_side_panel_width);
-        self.display_right_side_panel(ctx, max_side_panel_width);
+        self.display_left_side_panel(ctx, &max_side_panel_width);
+        self.display_right_side_panel(ctx, &max_side_panel_width);
         self.display_top_panel(ctx);
         self.display_main_panel(ctx);
         self.display_error_msg(ctx);
@@ -61,21 +64,21 @@ impl FileNewerGui {
         }
     }
 
-    fn display_left_side_panel(&mut self, ctx: &egui::Context, max_width:f32){
+    fn display_left_side_panel(&mut self, ctx: &egui::Context, max_width:&f32){
         egui::SidePanel::left("File_Tree")
             .resizable(true)
             .default_width(DEFAULT_SIDE_BAR_WIDTH)
-            .max_width(max_width)
+            .max_width(*max_width)
             .show(ctx,|ui| {
                 self.build_side_panel_left(ui)
             });
     }
 
-    fn display_right_side_panel(&mut self, ctx: &egui::Context, max_width:f32){
+    fn display_right_side_panel(&mut self, ctx: &egui::Context, max_width:&f32){
         egui::SidePanel::right("File_Utils")
             .resizable(true)
             .default_width(DEFAULT_SIDE_BAR_WIDTH)
-            .max_width(max_width)
+            .max_width(*max_width)
             .show(ctx, |ui| {
                 self.build_side_panel_right(ui)
             });
@@ -108,11 +111,37 @@ impl FileNewerGui {
     }
 
     fn build_side_panel_right(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Utils");
+
         ui.vertical_centered(|ui| {
-            ui.heading("Right Panel");
+            ui.heading(
+                if self.selected_file != None {
+                    &self.files_in_cur_path[self.selected_file.unwrap()].file_name.to_str().unwrap()}
+                else {""});
         });
-        egui::ScrollArea::vertical().show(ui, |_ui| {});
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            if self.selected_file == None {
+                ui.label("Type: -");
+                ui.label("Has Write Perms: -");
+                ui.label("File Name: -");
+                ui.label("File Extension: -");
+
+                ui.label("Last Read : -");
+                ui.label("Last Write: -");
+                ui.label("Created   : -");
+            }
+            else {
+                let active = &self.files_in_cur_path[self.selected_file.unwrap()];
+                ui.label(format!("Type: {}", active.type_to_basic_str()));
+                ui.label(format!("Has Write Perms: {}", active.can_be_written));
+                ui.label(format!("File Name: {}", active.file_name.to_str().unwrap()));
+                ui.label(format!("File Extension: {}",
+                    match &active.file_ext{ Some(ext) => {ext} None => {"-"}}));
+
+                ui.label(format!("Last Write: {}", active.last_mod_formated()));
+                ui.label(format!("Last Read : {}", active.last_access_formated()));
+                ui.label(format!("Created   : {}", active.creation_time_formated()));
+            }
+        });
     }
 
     fn build_top_panel(&mut self, ui: &mut egui::Ui) {
@@ -140,7 +169,7 @@ impl FileNewerGui {
             return;
         }
 
-        match file_manager::get_files_in_dir(&path) {
+        match file_manager::get_files_in_dir(&path, &self.show_hidden) {
             Ok(files) => {
                 self.user_facing_path = path.clone();
                 self.active_path = PathBuf::from(path);
@@ -161,19 +190,12 @@ impl FileNewerGui {
             .min_scrolled_height(0.0)
             .max_scroll_height(height_available);
 
-
-        let file_ext_col = Column::auto();
-        let create_date_col = Column::auto();
-        let edit_date_col = Column::auto();
-        let file_size_col = Column::auto();
-
-        table = table.column(Column::exact(10.0))// File Icon
-            .column(Column::auto())
-            //.at_most(width_available))// File Name
-            .column(file_ext_col)// File type
-            .column(create_date_col)// File creation date
-            .column(edit_date_col)      // File last edit date
-            .column(file_size_col);          //create
+        table = table.column(Column::exact(10.0)) // File Icon
+            .column(Column::auto().clip(true).at_least(80.0)) // File Name
+            .column(Column::auto().clip(true).at_least(40.0)) // File type
+            .column(Column::auto().clip(true).at_least(100.0)) // File creation date
+            .column(Column::auto().clip(true).at_least(100.0)) // File last edit date
+            .column(Column::auto().clip(true).at_least(40.0)); //File Size
 
         table = table.sense(egui::Sense::click());
 
@@ -187,70 +209,50 @@ impl FileNewerGui {
                 header.col(|ui| { ui.strong("File Size"); });
             })
             .body(|mut body| {
-                for file in self.files_in_cur_path.iter() {
-                    if file.is_hidden { continue; }
-                    const ROW_HEIGHT: f32 = 18.0;
-                    body.row(ROW_HEIGHT, |mut row| {
-                        //TODO check how selection works row.set_selected(self.selection.contains(&row_index));
-                        row.col(|ui| {
-                            ui.label(match (file.is_dir, file.can_be_written, file.is_link) {
-                                (true, false, false) => { "D".to_string() }
-                                (true, true, false) => { "d".to_string() }
-                                (false, false, true) => { "L".to_string() }
-                                (false, true, true) => { "l".to_string() }
-                                (false, false, false) => { "F".to_string() }
-                                (false, true, false) => { "f".to_string() }
-                                _ => { "?".to_string() }
-                            });
-                        });
-                        row.col(|ui| {
-                            ui.label(match file.file_name.to_str() {
-                                Some(s) => s.to_string(),
-                                None => "!!ERROR!!".to_string(),
-                            });
-                        });
-                        row.col(|ui| { ui.label(file.file_ext.as_ref().unwrap_or(&"".to_string())); });
-                        row.col(|ui| {
-                            ui.label(
-                                file.creation_time
-                                    .map(|t|
-                                        DateTime::<Local>::from(t)
-                                            .format("%F %T")
-                                            .to_string())
-                                    .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
-                            );
-                        });
-                        row.col(|ui| {
-                            ui.label(
-                                file.last_modification
-                                    .map(|t|
-                                        DateTime::<Local>::from(t)
-                                            .format("%F %T")
-                                            .to_string())
-                                    .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
-                            );
-                        });
+                const ROW_HEIGHT: f32 = 18.0;
+                body.rows(ROW_HEIGHT, self.files_in_cur_path.len(), |mut row| {
+                    let row_index = row.index();
+                    let mut file = &self.files_in_cur_path[row_index];
 
-                        row.col(|ui| {
-                            ui.label(
-                                if !file.is_dir { format!("{}", file.file_size) } else { "-".to_owned() });
+                    row.col(|ui| {
+                        ui.label(file.single_char_desc());
+                    });
+                    row.col(|ui| {
+                        ui.label(match file.file_name.to_str() {
+                            Some(s) => s.to_string(),
+                            None => "!!ERROR!!".to_string(),
                         });
                     });
-                }
-            })
+                    row.col(|ui| { ui.label(file.file_ext.as_ref().unwrap_or(&"".to_string())); });
+                    row.col(|ui| {
+                        ui.label(file.creation_time_formated());
+                    });
+                    row.col(|ui| {
+                        ui.label(file.last_mod_formated());
+                    });
+
+                    row.col(|ui| {
+                        ui.label(
+                            if file.is_dir(){format!("{}", file.file_size)}else {"-".to_owned()});
+                    });
+
+                    let rr = row.response();
+                    if rr.clicked(){
+                        if self.selected_file == Some(row_index) {
+                            self.error_message = Some("YOO DOUBLE CLICK".to_owned())
+                        }
+                        else{ self.selected_file = Some(row_index); }
+                    }
+                    row.set_selected(self.selected_file == Some(row_index));
+
+
+                });
+            });
     }
 
     fn build_main_frame(&mut self, ui: &mut egui::Ui) {
-        use egui_extras::{Size, StripBuilder};
-        StripBuilder::new(ui)
-            .size(Size::remainder())//at_least(100.0)) // for the table
-            //.size(Size::exact(body_text_size)) // for the source code link
-            .vertical(|mut strip| {
-                strip.cell(|ui| {
-                    egui::ScrollArea::horizontal().show(ui, |ui| {
-                        self.build_files_table(ui);
-                    });
-                });
-            });
+        egui::ScrollArea::horizontal().show(ui, |ui| {
+            self.build_files_table(ui);
+        });
     }
 }

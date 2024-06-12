@@ -5,11 +5,22 @@ use std::path::Path;
 use std::time::SystemTime;
 use std::fs;
 use std::os::windows::prelude::MetadataExt;
+use chrono::{DateTime, Local};
+
+#[derive(PartialEq)]
+pub enum FileType{
+    WriteableDir,
+    UnwritableDir,
+    WritableFile,
+    UnwritableFile,
+    WritableLink,
+    UnwritableLink,
+    Unknown
+}
 
 pub struct FileInfo {
-    pub(crate) is_dir: bool,
-    pub(crate) can_be_written: bool,
-    pub(crate) is_link: bool,
+    pub(crate) file_type: FileType, //
+    pub(crate) can_be_written: bool,//
     pub(crate) file_name: OsString,
     pub(crate) file_ext: Option<String>,
     pub(crate) file_size: u64,
@@ -17,6 +28,53 @@ pub struct FileInfo {
     pub(crate) last_modification: Option<SystemTime>,
     pub(crate) creation_time: Option<SystemTime>,
     pub(crate) is_hidden: bool,
+}
+impl FileInfo{
+    pub fn is_dir(&self) -> bool{
+        self.file_type == FileType::UnwritableDir
+            || self.file_type == FileType::WriteableDir
+    }
+
+    pub fn single_char_desc(&self) -> &str{
+        match self.file_type {
+            FileType::UnwritableDir => { "D" }
+            FileType::WriteableDir => { "d" }
+            FileType::UnwritableLink => { "L" }
+            FileType::WritableLink => { "l" }
+            FileType::UnwritableFile => { "F" }
+            FileType::WritableFile => { "f" }
+            _ => { "?" }
+        }
+    }
+
+    pub fn type_to_basic_str(&self) -> &str{
+        match self.file_type {
+            FileType::UnwritableDir => { "Directory" }
+            FileType::WriteableDir => { "Directory" }
+            FileType::UnwritableLink => { "Link" }
+            FileType::WritableLink => { "Link" }
+            FileType::UnwritableFile => { "File" }
+            FileType::WritableFile => { "File" }
+            _ => { "UNKNOWN" }
+        }
+    }
+
+    pub fn gen_type_enum(is_dir:&bool, is_writable:&bool, is_link:&bool) -> FileType{
+        match (is_dir, is_writable, is_link) {
+            (true, false, false) => { FileType::UnwritableDir }
+            (true, true, false) => { FileType::WriteableDir }
+            (false, false, true) => { FileType::UnwritableLink }
+            (false, true, true) => { FileType::WritableLink }
+            (false, false, false) => { FileType::UnwritableFile }
+            (false, true, false) => { FileType::WritableFile }
+            _ => { FileType::Unknown }
+        }
+    }
+
+
+    pub fn last_access_formated(&self) -> String {format_system_time_opt(self.last_access)}
+    pub fn last_mod_formated(&self) -> String {format_system_time_opt(self.last_modification)}
+    pub fn creation_time_formated(&self) -> String {format_system_time_opt(self.creation_time)}
 }
 
 pub fn evaluate_path_vars(user_facing_path: &str) -> Result<String, VarError> {
@@ -53,7 +111,7 @@ pub fn evaluate_path_vars(user_facing_path: &str) -> Result<String, VarError> {
 
 pub fn check_dir_exists(path: &String) -> bool { Path::is_dir(path.as_ref()) }
 
-pub fn get_files_in_dir<P: AsRef<Path>>(path: &P) -> io::Result<Vec<FileInfo>> {
+pub fn get_files_in_dir<P: AsRef<Path>>(path: &P, inc_hidden: &bool) -> io::Result<Vec<FileInfo>> {
     fs::read_dir(path)?.into_iter()
         .filter_map(|entry| {
             let dir = entry.ok()?;
@@ -61,10 +119,15 @@ pub fn get_files_in_dir<P: AsRef<Path>>(path: &P) -> io::Result<Vec<FileInfo>> {
             let file_ext = dir.path().extension()
                 .and_then(OsStr::to_str)
                 .map(|s| s.to_owned());
+            if !inc_hidden && is_hidden(&dir.path()).unwrap(){
+                return None
+            }
+            let file_type = FileInfo::gen_type_enum(&meta.is_dir(),
+                                                    &!meta.permissions().readonly(),
+                                                    &meta.file_type().is_symlink());
             Some(Ok(FileInfo {
-                is_dir: meta.is_dir(),
+                file_type,
                 can_be_written: !meta.permissions().readonly(),
-                is_link: meta.file_type().is_symlink(),
                 file_name: dir.file_name(),
                 file_ext,
                 file_size: meta.len(),
@@ -87,11 +150,14 @@ pub fn get_file_info<P: AsRef<Path>>(path: &P) -> io::Result<FileInfo>{
     let file_name = path.file_name()
         .map(|os_str| os_str.to_os_string())
         .unwrap_or_else(|| OsString::from(""));
+    let file_type = FileInfo::gen_type_enum(
+        &meta.is_dir(),
+        &!meta.permissions().readonly(),
+        &meta.file_type().is_symlink());
 
     Ok(FileInfo {
-        is_dir: meta.is_dir(),
+        file_type,
         can_be_written: !meta.permissions().readonly(),
-        is_link: meta.file_type().is_symlink(),
         file_name: OsString::from(file_name),
         file_ext,
         file_size: meta.len(),
@@ -112,4 +178,12 @@ pub fn is_hidden(file_path: &std::path::PathBuf) -> io::Result<bool> {
     } else {
         Ok(false)
     }
+}
+
+pub fn format_system_time_opt(sys_time: Option<SystemTime>) -> String{
+    sys_time.map(|t|
+        DateTime::<Local>::from(t)
+            .format("%F %T")
+            .to_string())
+        .unwrap_or_else(|| "XXXX-XX-XX XX:XX:XX".to_string())
 }
