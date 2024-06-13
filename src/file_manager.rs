@@ -8,6 +8,7 @@ use std::os::windows::prelude::MetadataExt;
 use chrono::{DateTime, Local};
 
 #[derive(PartialEq)]
+#[derive(Debug)]
 pub enum FileType{
     WriteableDir,
     UnwritableDir,
@@ -18,6 +19,7 @@ pub enum FileType{
     Unknown
 }
 
+#[derive(Debug)]
 pub struct FileInfo {
     pub(crate) file_type: FileType, //
     pub(crate) can_be_written: bool,//

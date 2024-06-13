@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 use std::process::Command;
 use eframe::egui;
+
 use egui_extras::{Column, TableBuilder};
 use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo, get_files_in_dir};
-use crate::file_ordering::DisplayOptions;
+use crate::file_ordering::{DisplayOptions, SortBy};
 
 // CONSTS
 const MIN_CENTRAL_PANEL_WIDTH:f32 = 600.0;
@@ -38,7 +39,6 @@ impl eframe::App for FileNewerGui {
         let max_side_panel_width =
             (ctx.available_rect().width() - MIN_CENTRAL_PANEL_WIDTH) / 2.0;
         self.update_files_this_loop = false;
-        let showing_hidden = self.display_options.show_hidden.clone();
         self.display_menu_bar(ctx);
         self.display_left_side_panel(ctx, &max_side_panel_width);
         self.display_right_side_panel(ctx, &max_side_panel_width);
@@ -47,7 +47,7 @@ impl eframe::App for FileNewerGui {
         self.display_error_msg(ctx);
         ctx.request_repaint();
 
-        if self.update_files_this_loop || (self.display_options.show_hidden != showing_hidden){
+        if self.update_files_this_loop {
             self.selected_file = None;
             self.update_working_dir();
         }
@@ -130,7 +130,9 @@ impl FileNewerGui {
             });
             ui.menu_button("Settings", |ui|{
                 ui.label("SHOW");
-                ui.checkbox(&mut self.display_options.show_hidden, "Hidden Files");
+                if ui.checkbox(&mut self.display_options.show_hidden, "Hidden Files").changed(){
+                    self.update_files_this_loop = true;
+                };
                 ui.checkbox(&mut self.display_options.show_file_ext, "File Extension");
                 ui.checkbox(&mut self.display_options.show_file_size, "File Size");
                 ui.checkbox(&mut self.display_options.show_creation, "Creation Time");
@@ -138,6 +140,27 @@ impl FileNewerGui {
                 ui.checkbox(&mut self.display_options.show_last_acc, "Last Access Time");
                 ui.checkbox(&mut self.display_options.show_file_type, "Show Type Letter");
                 ui.separator();
+            });
+            ui.menu_button("Sort by", |ui| {
+                if ui.checkbox(&mut self.display_options.filter_dec, "Sort Descending").changed(){
+                    self.update_files_this_loop = true;
+                };
+                let sort_options = [
+                    ("File Name", SortBy::Name),
+                    ("File Type", SortBy::Type),
+                    ("File Extension", SortBy::Ext),
+                    ("Creation Date", SortBy::CreateDate),
+                    ("Modification Date", SortBy::ModDate),
+                    ("View Date", SortBy::ViewDate),
+                    ("File Size", SortBy::Size),
+                    ("Nan", SortBy::Nan),
+                ];
+                for (label, sort_by) in sort_options.iter() {
+                    if ui.button(format!("{}{}", if self.display_options.sort_by == *sort_by {"*"} else {""}, label)).clicked() {
+                        self.display_options.sort_by = sort_by.clone();
+                        self.update_files_this_loop = true;
+                    }
+                }
             });
             ui.label(format!("Files in Current DIR {}", self.files_in_cur_path.len()))
         });
@@ -210,7 +233,8 @@ impl FileNewerGui {
         }
 
         match get_files_in_dir(&path, &self.display_options.show_hidden) {
-            Ok(files) => {
+            Ok(mut files) => {
+                self.display_options.sort(&mut files);
                 self.user_facing_path = path.clone();
                 self.files_in_cur_path = files;
             },
