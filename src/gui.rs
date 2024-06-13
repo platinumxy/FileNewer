@@ -10,6 +10,7 @@ const MIN_CENTRAL_PANEL_WIDTH:f32 = 600.0;
 const DEFAULT_SIDE_BAR_WIDTH:f32 = 150.0;
 
 
+
 pub struct FileNewerGui {
     active_path: PathBuf,
     user_facing_path: String,
@@ -37,6 +38,7 @@ impl eframe::App for FileNewerGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let max_side_panel_width =
             (ctx.available_rect().width() - MIN_CENTRAL_PANEL_WIDTH) / 2.0;
+        self.display_menu_bar(ctx);
         self.display_left_side_panel(ctx, &max_side_panel_width);
         self.display_right_side_panel(ctx, &max_side_panel_width);
         self.display_top_panel(ctx);
@@ -99,10 +101,32 @@ impl FileNewerGui {
                 self.build_main_frame(ui)
             });
     }
+    fn display_menu_bar(&mut self, ctx: &egui::Context){
+        egui::TopBottomPanel::top("menu_bar")
+            .show(ctx, |ui|{
+                self.build_menu(ui);
+            });
+    }
 }
 
 // BUILD ITEMS
 impl FileNewerGui {
+    fn build_menu(&mut self, ui: &mut egui::Ui){
+        egui::menu::bar(ui, |ui|{
+            ui.menu_button("File", |ui| {
+                if ui.button("Save").clicked() {
+                    self.error_message = Some("Saving".to_string());
+                }
+                if ui.button("Quit").clicked() {
+                    std::process::exit(0);
+                }
+            });
+            ui.menu_button("Settings", |ui|{
+
+            })
+        });
+    }
+
     fn build_side_panel_left(&mut self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
             ui.heading("Left Panel");
@@ -208,11 +232,11 @@ impl FileNewerGui {
                 header.col(|ui| { ui.strong("Modified Date"); });
                 header.col(|ui| { ui.strong("File Size"); });
             })
-            .body(|mut body| {
+            .body(|body| {
                 const ROW_HEIGHT: f32 = 18.0;
                 body.rows(ROW_HEIGHT, self.files_in_cur_path.len(), |mut row| {
                     let row_index = row.index();
-                    let mut file = &self.files_in_cur_path[row_index];
+                    let file = &self.files_in_cur_path[row_index];
 
                     row.col(|ui| {
                         ui.label(file.single_char_desc());
