@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 eframe =  "0.27.2"
-# For image support:
 egui_extras = "0.27.2"
+open = "5.1.4"
 
 env_logger = "0.11.3"
 lorem-ipsum-generator = "0.1.0"

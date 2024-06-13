@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::process::Command;
 use eframe::egui;
 
 use egui_extras::{Column, TableBuilder};
@@ -296,7 +295,7 @@ impl FileNewerGui {
 
                     row.col(|ui| {
                         ui.label(
-                            if file.is_dir(){format!("{}", file.file_size)}else {"-".to_owned()});
+                            if !file.is_dir(){format!("{}", file.file_size)}else {"-".to_owned()});
                     });
 
                     let rr = row.response();
@@ -310,9 +309,7 @@ impl FileNewerGui {
                             else {
                                 let mut pth = PathBuf::from(&self.user_facing_path);
                                 pth.push(&file.file_name);
-                                let _cmd = Command::new("cmd",)
-                                    .args(&["/C", "start", "", pth.to_str().unwrap()])
-                                    .spawn();
+                                let _ = open::that_detached(pth);
                             }
                                 //self.error_message = Some("Currently not supported".to_string());}
                         }
