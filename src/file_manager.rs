@@ -139,35 +139,6 @@ pub fn get_files_in_dir<P: AsRef<Path>>(path: &P, inc_hidden: &bool) -> io::Resu
         }).collect()
 }
 
-pub fn get_file_info<P: AsRef<Path>>(path: &P) -> io::Result<FileInfo>{
-    let path = path.as_ref();
-    let meta = fs::metadata(&path)?;
-
-    let file_ext = path.extension()
-        .and_then(OsStr::to_str)
-        .map(|s| s.to_owned());
-
-    let file_name = path.file_name()
-        .map(|os_str| os_str.to_os_string())
-        .unwrap_or_else(|| OsString::from(""));
-    let file_type = FileInfo::gen_type_enum(
-        &meta.is_dir(),
-        &!meta.permissions().readonly(),
-        &meta.file_type().is_symlink());
-
-    Ok(FileInfo {
-        file_type,
-        can_be_written: !meta.permissions().readonly(),
-        file_name: OsString::from(file_name),
-        file_ext,
-        file_size: meta.len(),
-        last_access: meta.accessed().ok(),
-        last_modification: meta.modified().ok(),
-        creation_time: meta.created().ok(),
-        is_hidden: is_hidden(&path.to_path_buf()).unwrap()
-    })
-}
-
 // code is_hidden from https://users.rust-lang.org/t/read-windows-hidden-file-attribute/51180/7
 pub fn is_hidden(file_path: &std::path::PathBuf) -> io::Result<bool> {
     let metadata = fs::metadata(file_path)?;

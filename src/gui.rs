@@ -1,35 +1,32 @@
-use std::env;
-use std::path::{Path, PathBuf};
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use crate::file_manager;
-use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo};
+use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo, get_files_in_dir};
 
 // CONSTS
 const MIN_CENTRAL_PANEL_WIDTH:f32 = 600.0;
 const DEFAULT_SIDE_BAR_WIDTH:f32 = 150.0;
 
-
-
 pub struct FileNewerGui {
-    active_path: PathBuf,
     user_facing_path: String,
     error_message: Option<String>,
     files_in_cur_path: Vec<FileInfo>,
     selected_file: Option<usize>,
-    show_hidden:bool
+    show_hidden:bool,
+    dir_changed_this_render_loop:bool,
 }
 
 impl Default for FileNewerGui {
     fn default() -> Self {
-        let path = PathBuf::from(Path::new(&env::var("USERPROFILE").unwrap()));
+        // shouldn't fail
+        let pth = evaluate_path_vars("%USERPROFILE%").unwrap();
         Self {
-            files_in_cur_path: file_manager::get_files_in_dir(&path, &false).expect("REASON"),
-            user_facing_path: path.to_str().unwrap().to_string(),
-            active_path: path,
+            files_in_cur_path: get_files_in_dir(&pth, &false).expect("REASON"),
+            user_facing_path: pth,
             error_message: None,
             selected_file: None,
             show_hidden: false,
+            dir_changed_this_render_loop:false
         }
     }
 }
@@ -38,6 +35,8 @@ impl eframe::App for FileNewerGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let max_side_panel_width =
             (ctx.available_rect().width() - MIN_CENTRAL_PANEL_WIDTH) / 2.0;
+        self.dir_changed_this_render_loop = false;
+
         self.display_menu_bar(ctx);
         self.display_left_side_panel(ctx, &max_side_panel_width);
         self.display_right_side_panel(ctx, &max_side_panel_width);
@@ -138,12 +137,12 @@ impl FileNewerGui {
 
         ui.vertical_centered(|ui| {
             ui.heading(
-                if self.selected_file != None {
+                if !(self.selected_file == None || self.dir_changed_this_render_loop){
                     &self.files_in_cur_path[self.selected_file.unwrap()].file_name.to_str().unwrap()}
                 else {""});
         });
         egui::ScrollArea::vertical().show(ui, |ui| {
-            if self.selected_file == None {
+            if self.selected_file == None || self.dir_changed_this_render_loop{
                 ui.label("Type: -");
                 ui.label("Has Write Perms: -");
                 ui.label("File Name: -");
@@ -196,7 +195,6 @@ impl FileNewerGui {
         match file_manager::get_files_in_dir(&path, &self.show_hidden) {
             Ok(files) => {
                 self.user_facing_path = path.clone();
-                self.active_path = PathBuf::from(path);
                 self.files_in_cur_path = files;
             },
             Err(e) => {
@@ -235,6 +233,7 @@ impl FileNewerGui {
             .body(|body| {
                 const ROW_HEIGHT: f32 = 18.0;
                 body.rows(ROW_HEIGHT, self.files_in_cur_path.len(), |mut row| {
+                    if self.dir_changed_this_render_loop {return;}
                     let row_index = row.index();
                     let file = &self.files_in_cur_path[row_index];
 
@@ -263,13 +262,18 @@ impl FileNewerGui {
                     let rr = row.response();
                     if rr.clicked(){
                         if self.selected_file == Some(row_index) {
-                            self.error_message = Some("YOO DOUBLE CLICK".to_owned())
+                            if file.is_dir() {
+                                &self.user_facing_path.push_str(file.file_name.to_str().unwrap());
+                                &self.user_facing_path.push_str(&*"\\");
+                                self.update_working_dir();
+                                self.dir_changed_this_render_loop = true;
+                                self.selected_file = None;
+                            }
+                            else { self.error_message = Some("Currently not supported".to_string());}
                         }
                         else{ self.selected_file = Some(row_index); }
                     }
                     row.set_selected(self.selected_file == Some(row_index));
-
-
                 });
             });
     }
