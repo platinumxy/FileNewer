@@ -263,8 +263,8 @@ impl FileNewerGui {
                     if rr.clicked(){
                         if self.selected_file == Some(row_index) {
                             if file.is_dir() {
-                                &self.user_facing_path.push_str(file.file_name.to_str().unwrap());
-                                &self.user_facing_path.push_str(&*"\\");
+                                self.user_facing_path.push_str(file.file_name.to_str().unwrap());
+                                self.user_facing_path.push_str(&*"\\");
                                 self.update_working_dir();
                                 self.dir_changed_this_render_loop = true;
                                 self.selected_file = None;
