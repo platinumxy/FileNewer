@@ -3,6 +3,7 @@
 mod gui;
 mod file_manager;
 mod tests;
+mod file_ordering;
 
 use crate::gui::FileNewerGui;
 use eframe::egui;

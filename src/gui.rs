@@ -1,7 +1,7 @@
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
-use crate::file_manager;
 use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo, get_files_in_dir};
+use crate::file_ordering::DisplayOptions;
 
 // CONSTS
 const MIN_CENTRAL_PANEL_WIDTH:f32 = 600.0;
@@ -12,8 +12,8 @@ pub struct FileNewerGui {
     error_message: Option<String>,
     files_in_cur_path: Vec<FileInfo>,
     selected_file: Option<usize>,
-    show_hidden:bool,
-    dir_changed_this_render_loop:bool,
+    display_options: DisplayOptions,
+    update_files_this_loop:bool,
 }
 
 impl Default for FileNewerGui {
@@ -25,8 +25,8 @@ impl Default for FileNewerGui {
             user_facing_path: pth,
             error_message: None,
             selected_file: None,
-            show_hidden: false,
-            dir_changed_this_render_loop:false
+            display_options: DisplayOptions::default(),
+            update_files_this_loop:false
         }
     }
 }
@@ -35,8 +35,8 @@ impl eframe::App for FileNewerGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let max_side_panel_width =
             (ctx.available_rect().width() - MIN_CENTRAL_PANEL_WIDTH) / 2.0;
-        self.dir_changed_this_render_loop = false;
-
+        self.update_files_this_loop = false;
+        let showing_hidden = self.display_options.show_hidden.clone();
         self.display_menu_bar(ctx);
         self.display_left_side_panel(ctx, &max_side_panel_width);
         self.display_right_side_panel(ctx, &max_side_panel_width);
@@ -44,6 +44,12 @@ impl eframe::App for FileNewerGui {
         self.display_main_panel(ctx);
         self.display_error_msg(ctx);
         ctx.request_repaint();
+
+        if self.update_files_this_loop || (self.display_options.show_hidden != showing_hidden){
+            self.selected_file = None;
+            self.update_working_dir();
+        }
+
     }
 }
 
@@ -121,8 +127,16 @@ impl FileNewerGui {
                 }
             });
             ui.menu_button("Settings", |ui|{
-
-            })
+                ui.label("SHOW");
+                ui.checkbox(&mut self.display_options.show_hidden, "Hidden Files");
+                ui.checkbox(&mut self.display_options.show_file_ext, "File Extension");
+                ui.checkbox(&mut self.display_options.show_file_size, "File Size");
+                ui.checkbox(&mut self.display_options.show_creation, "Creation Time");
+                ui.checkbox(&mut self.display_options.show_last_mod, "Last Modification Time");
+                ui.checkbox(&mut self.display_options.show_file_type, "Show Type Letter");
+                ui.separator();
+            });
+            ui.label(format!("Files in Current DIR {}", self.files_in_cur_path.len()))
         });
     }
 
@@ -137,12 +151,12 @@ impl FileNewerGui {
 
         ui.vertical_centered(|ui| {
             ui.heading(
-                if !(self.selected_file == None || self.dir_changed_this_render_loop){
+                if !(self.selected_file == None || self.update_files_this_loop){
                     &self.files_in_cur_path[self.selected_file.unwrap()].file_name.to_str().unwrap()}
                 else {""});
         });
         egui::ScrollArea::vertical().show(ui, |ui| {
-            if self.selected_file == None || self.dir_changed_this_render_loop{
+            if self.selected_file == None || self.update_files_this_loop{
                 ui.label("Type: -");
                 ui.label("Has Write Perms: -");
                 ui.label("File Name: -");
@@ -192,7 +206,7 @@ impl FileNewerGui {
             return;
         }
 
-        match file_manager::get_files_in_dir(&path, &self.show_hidden) {
+        match get_files_in_dir(&path, &self.display_options.show_hidden) {
             Ok(files) => {
                 self.user_facing_path = path.clone();
                 self.files_in_cur_path = files;
@@ -233,7 +247,6 @@ impl FileNewerGui {
             .body(|body| {
                 const ROW_HEIGHT: f32 = 18.0;
                 body.rows(ROW_HEIGHT, self.files_in_cur_path.len(), |mut row| {
-                    if self.dir_changed_this_render_loop {return;}
                     let row_index = row.index();
                     let file = &self.files_in_cur_path[row_index];
 
@@ -265,9 +278,7 @@ impl FileNewerGui {
                             if file.is_dir() {
                                 self.user_facing_path.push_str(file.file_name.to_str().unwrap());
                                 self.user_facing_path.push_str(&*"\\");
-                                self.update_working_dir();
-                                self.dir_changed_this_render_loop = true;
-                                self.selected_file = None;
+                                self.update_files_this_loop = true;
                             }
                             else { self.error_message = Some("Currently not supported".to_string());}
                         }
