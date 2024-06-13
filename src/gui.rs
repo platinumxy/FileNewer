@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+use std::process::Command;
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use crate::file_manager::{check_dir_exists, evaluate_path_vars, FileInfo, get_files_in_dir};
@@ -133,6 +135,7 @@ impl FileNewerGui {
                 ui.checkbox(&mut self.display_options.show_file_size, "File Size");
                 ui.checkbox(&mut self.display_options.show_creation, "Creation Time");
                 ui.checkbox(&mut self.display_options.show_last_mod, "Last Modification Time");
+                ui.checkbox(&mut self.display_options.show_last_acc, "Last Access Time");
                 ui.checkbox(&mut self.display_options.show_file_type, "Show Type Letter");
                 ui.separator();
             });
@@ -280,7 +283,14 @@ impl FileNewerGui {
                                 self.user_facing_path.push_str(&*"\\");
                                 self.update_files_this_loop = true;
                             }
-                            else { self.error_message = Some("Currently not supported".to_string());}
+                            else {
+                                let mut pth = PathBuf::from(&self.user_facing_path);
+                                pth.push(&file.file_name);
+                                let _cmd = Command::new("cmd",)
+                                    .args(&["/C", "start", "", pth.to_str().unwrap()])
+                                    .spawn();
+                            }
+                                //self.error_message = Some("Currently not supported".to_string());}
                         }
                         else{ self.selected_file = Some(row_index); }
                     }
